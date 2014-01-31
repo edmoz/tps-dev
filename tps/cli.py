@@ -52,6 +52,11 @@ def main():
                        dest="ignore_unused_engines",
                        help="If defined, don't load unused engines in individual tests."
                              " Has no effect for pulse monitor.")
+    parser.add_option("--sync_ts_uri",
+                       default=None,
+                       action="store",
+                       dest="sync_ts_uri",
+                       help="If defined, sets the token server cluster url")
     (options, args) = parser.parse_args()
 
     configfile = options.configfile
@@ -92,7 +97,8 @@ def main():
                         rlock=rlock,
                         mobile=options.mobile,
                         resultfile=options.resultfile,
-                        ignore_unused_engines=options.ignore_unused_engines)
+                        ignore_unused_engines=options.ignore_unused_engines,
+                        sync_ts_uri=options.sync_ts_uri)
     TPS.run_tests()
 
 if __name__ == "__main__":

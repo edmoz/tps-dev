@@ -72,6 +72,9 @@ class TPSTestRunner(object):
                             'extensions.autoDisableScopes': 10,
                             # Don't open a dialog to show available add-on updates
                             'extensions.update.notifyUser' : False,
+                            'services.sync.log.appender.file.logOnSuccess' : True,
+                            'services.sync.fxaccounts.enabled' : True,
+                            'identity.fxaccounts.enabled' : True,
                           }
     syncVerRe = re.compile(
         r"Sync version: (?P<syncversion>.*)\n")
@@ -84,7 +87,7 @@ class TPSTestRunner(object):
                  testfile="sync.test",
                  binary=None, config=None, rlock=None, mobile=False,
                  logfile="tps.log", resultfile="tps_result.json",
-                 ignore_unused_engines=False):
+                 ignore_unused_engines=False, sync_ts_uri=""):
         self.extensions = []
         self.testfile = testfile
         self.logfile = os.path.abspath(logfile)
@@ -107,6 +110,7 @@ class TPSTestRunner(object):
         self.addonversion = None
         self.postdata = {}
         self.errorlogs = {}
+        self.sync_ts_uri = sync_ts_uri
 
     @property
     def mobile(self):
@@ -223,29 +227,31 @@ class TPSTestRunner(object):
             phase.run()
 
             # if a failure occurred, dump the entire sync log into the test log
-            if phase.status != "PASS":
-                for profile in profiles:
-                    self.log("\nDumping sync log for profile %s\n" %  profiles[profile].profile)
-                    for root, dirs, files in os.walk(os.path.join(profiles[profile].profile, 'weave', 'logs')):
-                        for f in files:
-                            weavelog = os.path.join(profiles[profile].profile, 'weave', 'logs', f)
-                            if os.access(weavelog, os.F_OK):
-                                with open(weavelog, 'r') as fh:
-                                    for line in fh:
-                                        possible_time = line[0:13]
-                                        if len(possible_time) == 13 and possible_time.isdigit():
-                                            time_ms = int(possible_time)
-                                            formatted = time.strftime('%Y-%m-%d %H:%M:%S',
-                                                    time.localtime(time_ms / 1000))
-                                            self.log('%s.%03d %s' % (
-                                                formatted, time_ms % 1000, line[14:] ))
-                                        else:
-                                            self.log(line)
+            # if phase.status != "PASS":
+            for profile in profiles:
+                self.log("\nDumping sync log for profile %s\n" %  profiles[profile].profile)
+                for root, dirs, files in os.walk(os.path.join(profiles[profile].profile, 'weave', 'logs')):
+                    for f in files:
+                        weavelog = os.path.join(profiles[profile].profile, 'weave', 'logs', f)
+                        print 'EDWIN:: weave log: ', weavelog
+                        if os.access(weavelog, os.F_OK):
+                            with open(weavelog, 'r') as fh:
+                                for line in fh:
+                                    possible_time = line[0:13]
+                                    if len(possible_time) == 13 and possible_time.isdigit():
+                                        time_ms = int(possible_time)
+                                        formatted = time.strftime('%Y-%m-%d %H:%M:%S',
+                                                time.localtime(time_ms / 1000))
+                                        self.log('%s.%03d %s' % (
+                                            formatted, time_ms % 1000, line[14:] ))
+                                    else:
+                                        self.log(line)
                 break;
 
         # grep the log for FF and sync versions
         f = open(self.logfile)
         logdata = f.read()
+
         match = self.syncVerRe.search(logdata)
         sync_version = match.group("syncversion") if match else 'unknown'
         match = self.ffVerRe.search(logdata)
@@ -316,6 +322,9 @@ class TPSTestRunner(object):
         if self.mobile:
             self.preferences.update({'services.sync.client.type' : 'mobile'})
 
+        if self.sync_ts_uri:
+            self.preferences.update({'services.sync.tokenServerURI' : self.sync_ts_uri})
+
         # Acquire a lock to make sure no other threads are running tests
         # at the same time.
         if self.rlock:
@@ -361,6 +370,7 @@ class TPSTestRunner(object):
             self.rlock.release()
 
         # dump out a summary of test results
+        print 'PREFS:', self.preferences
         print 'Test Summary\n'
         for test in self.postdata.get('tests', {}):
             print '%s | %s | %s' % (test['state'], test['name'], test['message'])
